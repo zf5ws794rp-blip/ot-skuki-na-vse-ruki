@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>От скуки на все руки</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body{font:16px system-ui;margin:0;background:#eef2f7;color:#14213b}
+header,main{max-width:520px;margin:auto}header{background:#2563eb;color:#fff;padding:20px}
+main{padding:16px 16px 80px}section{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px}
+input,select,textarea,button{font:inherit;width:100%;padding:12px;margin:6px 0;border:1px solid #cbd5e1;border-radius:10px}
+button{background:#2563eb;color:#fff;border:0}button.ghost{background:#eef2ff;color:#2563eb}
+p{line-height:1.45}small{color:#64748b}h2{font-size:20px}.hidden{display:none}
+</style>
+</head>
+<body>
+<header><b>От скуки на все руки</b><p>Псков и Псковская область<br>+7 (992) 293-57-10</p></header>
+<main>
+<section><button class="ghost" onclick="mode('client')">Клиент</button><button class="ghost" onclick="mode('admin')">Администратор</button><button class="ghost" onclick="mode('master')">Мастер</button></section>
+<section id="form">
+<h2>Новая заявка</h2>
+<select id="service"><option>Авторемонт</option><option>Мастер на дом</option></select>
+<textarea id="description" placeholder="Что нужно сделать?"></textarea>
+<input id="clientName" placeholder="Имя">
+<input id="clientPhone" placeholder="Телефон">
+<input id="address" placeholder="Адрес выезда">
+<input id="preferredTime" placeholder="Желаемое время">
+<button onclick="createOrder()">Отправить заявку</button>
+</section>
+<section id="orders"><h2 id="title">Заявки</h2><div id="list"></div></section>
+</main>
+<script>
+const SUPABASE_URL="https://scowaktwwiczwbjxgrjx.supabase.co";
+const SUPABASE_KEY="sb_publishable_tc7I6BtfG1ChIOIr6xJxNQ_vjGReYlp";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let view="client";
+const statuses={new:"Новая",assigned:"Мастер назначен",progress:"В работе",way:"Мастер в пути",done:"Выполнен"};
+async function mode(v){view=v;document.getElementById("title").textContent=v==="master"?"Мои заказы":"Заявки";render()}
+async function createOrder(){
+const description=document.getElementById("description").value.trim(),clientName=document.getElementById("clientName").value.trim(),clientPhone=document.getElementById("clientPhone").value.trim();
+if(!description||!clientName||!clientPhone)return alert("Заполните описание, имя и телефон");
+const {error}=await db.from("orders").insert({service:document.getElementById("service").value,description,client_name:clientName,client_phone:clientPhone,address:document.getElementById("address").value,preferred_time:document.getElementById("preferredTime").value,status:"new",history:[]});
+if(error)return alert(error.message);
+document.getElementById("description").value="";document.getElementById("clientName").value="";document.getElementById("clientPhone").value="";document.getElementById("address").value="";document.getElementById("preferredTime").value="";
+render();alert("Заявка сохранена в общей базе")}
+async function update(id,changes){
+const {error}=await db.from("orders").update(changes).eq("id",id);
+if(error)return alert(error.message);render()}
+async function render(){
+const {data:orders,error}=await db.from("orders").select("*").order("created_at",{ascending:false});
+const {data:masters}=await db.from("masters").select("*").order("name");
+if(error)return document.getElementById("list").innerHTML="<p>Ошибка базы: "+error.message+"</p>";
+let list=orders;
+if(view==="master"){const m=prompt("Введите имя мастера:");list=orders.filter(o=>o.master_name===m)}
+document.getElementById("list").innerHTML=list.map(o=>`<section><b>${statuses[o.status]||o.status}</b><h2>${o.service} №${String(o.id).slice(0,8)}</h2><p>${o.description}</p><p>${o.client_name} · ${o.client_phone}</p><p>${o.address||""}<br>${o.preferred_time||""}</p>${view!=="client"?`<select onchange="update('${o.id}',{status:this.value})">${Object.entries(statuses).map(([k,v])=>`<option value="${k}" ${k===o.status?"selected":""}>${v}</option>`).join("")}</select>`:""}${view==="admin"?`<select onchange="update('${o.id}',{master_name:this.value})"><option value="">Не назначен</option>${(masters||[]).map(m=>`<option ${m.name===o.master_name?"selected":""}>${m.name}</option>`).join("")}</select><input placeholder="Стоимость" value="${o.price||""}" onchange="update('${o.id}',{price:this.value})">`:""}${view==="master"?`<input placeholder="Комментарий" value="${o.master_note||""}" onchange="update('${o.id}',{master_note:this.value})"><a href="tel:${String(o.client_phone).replace(/[^+0-9]/g,"")}">Позвонить клиенту</a>`:""}</section>`).join("")||"<p>Заявок пока нет.</p>"}
+mode("client");
+</script>
+</body>
+</html>
